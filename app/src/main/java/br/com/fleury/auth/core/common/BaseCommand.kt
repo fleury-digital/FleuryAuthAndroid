@@ -1,4 +1,4 @@
-package br.com.fleury.auth.common
+package br.com.fleury.auth.core.common
 
 sealed class BaseCommand {
 

@@ -1,4 +1,4 @@
-package br.com.fleury.auth.di
+package br.com.fleury.auth.core.di
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder

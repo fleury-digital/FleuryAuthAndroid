@@ -1,4 +1,4 @@
-package br.com.fleury.auth.domain
+package br.com.fleury.auth.core.domain
 
 import com.google.gson.annotations.SerializedName
 

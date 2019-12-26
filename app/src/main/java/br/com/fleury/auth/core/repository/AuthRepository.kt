@@ -1,21 +1,40 @@
-package br.com.fleury.auth.repository
+package br.com.fleury.auth.core.repository
 
-import br.com.fleury.auth.api.IAuthApi
-import br.com.fleury.auth.common.BaseCommand
-import br.com.fleury.auth.common.SingleLiveEvent
-import br.com.fleury.auth.domain.*
-import br.com.fleury.auth.repository.contracts.IAuthRepository
+import br.com.fleury.auth.core.api.IAuthApi
+import br.com.fleury.auth.core.common.BaseCommand
+import br.com.fleury.auth.core.common.SingleLiveEvent
+import br.com.fleury.auth.core.domain.*
+import br.com.fleury.auth.core.repository.contracts.IAuthRepository
 import java.net.HttpURLConnection
+import java.util.*
 
 class AuthRepository(
-  private val api: IAuthApi,
-  private val clientId: String,
-  private val credentials: String,
-  private val brand: String
+        private val api: IAuthApi,
+        private val clientId: String,
+        private val credentials: String,
+        private val brand: String
 ) : IAuthRepository {
 
   @Throws(NotImplementedError::class)
-  override fun byCpfAndPass() {
+  override suspend fun byCpfAndPass(
+          cpf: String,
+          password: String
+  ): SingleLiveEvent<BaseCommand> {
+    val data = SingleLiveEvent<BaseCommand>()
+    try {
+      authCodeHandler(data)?.let { authCode ->
+        accessTokenHandler(authCode.code, data)?.let { token ->
+          loginCpfHandler(cpf, password, token.accessToken, data)?.let { user ->
+            val userCompleted = completeUserData(user, token.accessToken, token.refreshToken)
+            data.postValue(BaseCommand.Success(userCompleted))
+          }
+        }
+      }
+    } catch (t: Throwable) {
+      t.message?.let { data.postValue(BaseCommand.Error(it)) }
+              ?: data.postValue(BaseCommand.TimeOut())
+    }
+    return data
   }
 
   @Throws(NotImplementedError::class)
@@ -39,7 +58,7 @@ class AuthRepository(
     try {
       authCodeHandler(data)?.let { authCode ->
         accessTokenHandler(authCode.code, data)?.let { token ->
-          loginHandler(userName, password, token.accessToken, data)?.let { user ->
+          loginUserHandler(userName, password, token.accessToken, data)?.let { user ->
             val userCompleted = completeUserData(user, token.accessToken, token.refreshToken)
             data.postValue(BaseCommand.Success(userCompleted))
           }
@@ -73,13 +92,31 @@ class AuthRepository(
     }
   }
 
-  private suspend fun loginHandler(
-    userName: String,
-    password: String,
-    accessToken: String,
-    data: SingleLiveEvent<BaseCommand>
+  private suspend fun loginUserHandler(
+          userName: String,
+          password: String,
+          accessToken: String,
+          data: SingleLiveEvent<BaseCommand>
   ): User? {
-    val request = LoginRequest(userName, password.toUpperCase(), brand)
+    val request = LoginUserRequest(userName, password.toUpperCase(Locale.getDefault()), brand = brand)
+    request.encode()
+    val response = api.login(request, accessToken = accessToken, clientId = clientId).await()
+    when (response.code()) {
+      HttpURLConnection.HTTP_OK -> return response.body()
+      else -> {
+        errorResponseHandler(response.code(), data)
+        return null
+      }
+    }
+  }
+
+  private suspend fun loginCpfHandler(
+          cpf: String,
+          password: String,
+          accessToken: String,
+          data: SingleLiveEvent<BaseCommand>
+  ): User? {
+    val request = LoginCpfRequest(cpf, password.toUpperCase(Locale.getDefault()), brand)
     request.encode()
     val response = api.login(request, accessToken = accessToken, clientId = clientId).await()
     when (response.code()) {

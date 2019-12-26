@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package br.com.fleury.auth.common
+package br.com.fleury.auth.core.common
 
 import androidx.annotation.MainThread
 import androidx.lifecycle.LifecycleOwner
